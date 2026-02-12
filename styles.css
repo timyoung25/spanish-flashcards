@@ -116,24 +116,18 @@ body {
   color: var(--muted);
 }
 
-/* Flashcard wrapper */
+/* Flashcard */
 .flashcard {
   width: 100%;
   border: 0;
   background: transparent;
   padding: 0;
-
-  /* Critical for iOS Safari 3D flips */
-  perspective: 1200px;
-  -webkit-perspective: 1200px;
-
-  /* Button reset helps Safari rendering quirks */
   -webkit-appearance: none;
   appearance: none;
   display: block;
 }
 
-/* --- iOS/Safari-safe 3D flip --- */
+/* No 3D rotate — iPhone-safe crossfade “flip” */
 .flash-inner {
   position: relative;
   height: 260px;
@@ -141,21 +135,6 @@ body {
   border: 1px solid var(--border);
   background: rgba(255,255,255,.04);
   overflow: hidden;
-
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-
-  transition: transform .35s cubic-bezier(.2,.8,.2,1);
-  will-change: transform;
-
-  /* Extra Safari nudge */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.flashcard.flipped .flash-inner {
-  transform: rotateY(180deg);
-  -webkit-transform: rotateY(180deg);
 }
 
 .face {
@@ -168,26 +147,26 @@ body {
   align-items: center;
   gap: 10px;
 
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-
-  transform: translateZ(1px);
-  -webkit-transform: translateZ(1px);
-}
-
-.face.front {
-  transform: rotateY(0deg) translateZ(1px);
-  -webkit-transform: rotateY(0deg) translateZ(1px);
+  opacity: 1;
+  transition: opacity .18s ease, transform .18s ease;
 }
 
 .face.back {
-  transform: rotateY(180deg) translateZ(1px);
-  -webkit-transform: rotateY(180deg) translateZ(1px);
+  opacity: 0;
+  transform: scale(0.98);
 }
-/* --- end flip fix --- */
+
+/* When flipped, hide front and show back */
+.flashcard.flipped .face.front {
+  opacity: 0;
+  transform: scale(0.98);
+  pointer-events: none;
+}
+
+.flashcard.flipped .face.back {
+  opacity: 1;
+  transform: scale(1);
+}
 
 .word {
   font-size: 34px;
@@ -225,4 +204,3 @@ body {
 .h2 { font-size: 16px; font-weight: 900; margin: 8px 0 4px; }
 .p { color: var(--muted); line-height: 1.5; margin: 6px 0 10px; }
 code { color: #d0d0ff; }
-
