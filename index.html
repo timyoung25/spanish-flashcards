@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Spanish Flashcards</title>
+</head>
+<body>
+  <header class="app-header">
+    <div class="title">
+      <div class="h1">Spanish First</div>
+      <div class="sub">Offline flashcards • spaced repetition</div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="App tabs">
+      <button class="tab active" data-tab="today" role="tab">Today</button>
+      <button class="tab" data-tab="study" role="tab">Study</button>
+      <button class="tab" data-tab="browse" role="tab">Browse</button>
+      <button class="tab" data-tab="stats" role="tab">Stats</button>
+      <button class="tab" data-tab="about" role="tab">About</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- TODAY -->
+    <section id="tab-today" class="panel active" aria-label="Today">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="label">Reviews due</div>
+            <div class="big" id="dueCount">—</div>
+          </div>
+          <div>
+            <div class="label">New/unstudied</div>
+            <div class="big" id="newCount">—</div>
+          </div>
+        </div>
+        <button id="startDueBtn" class="btn primary">Start Reviews</button>
+        <button id="studyAnyBtn" class="btn">Study Anyway (20)</button>
+        <div class="hint" id="todayHint"></div>
+      </div>
+    </section>
+
+    <!-- STUDY -->
+    <section id="tab-study" class="panel" aria-label="Study">
+      <div class="card">
+        <div class="study-top">
+          <div class="pill" id="queueLabel">Queue: —</div>
+          <div class="pill" id="posLabel">POS: —</div>
+        </div>
+
+        <button id="flashcard" class="flashcard" aria-label="Flashcard (tap to flip)">
+          <div class="flash-inner">
+            <div class="face front">
+              <div class="word" id="frontText">—</div>
+              <div class="small">Tap to flip</div>
+            </div>
+            <div class="face back">
+              <div class="word" id="backText">—</div>
+              <div class="small">Again / Hard / Good / Easy</div>
+            </div>
+          </div>
+        </button>
+
+        <div class="grades">
+          <button class="btn grade" data-grade="again">Again</button>
+          <button class="btn grade" data-grade="hard">Hard</button>
+          <button class="btn grade" data-grade="good">Good</button>
+          <button class="btn grade" data-grade="easy">Easy</button>
+        </div>
+
+        <div class="hint" id="studyHint"></div>
+      </div>
+    </section>
+
+    <!-- BROWSE -->
+    <section id="tab-browse" class="panel" aria-label="Browse">
+      <div class="card">
+        <div class="row">
+          <input id="searchInput" class="input" placeholder="Search Spanish or English…" autocomplete="off" />
+          <select id="posFilter" class="select" aria-label="Part of speech filter">
+            <option value="">All POS</option>
+          </select>
+        </div>
+        <div class="list" id="browseList"></div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section id="tab-stats" class="panel" aria-label="Stats">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="label">Total reviews</div>
+            <div class="big" id="totalReviews">—</div>
+          </div>
+          <div>
+            <div class="label">Accuracy</div>
+            <div class="big" id="accuracy">—</div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Cards learned (rough)</div>
+            <div class="big" id="learnedCount">—</div>
+          </div>
+          <div>
+            <div class="label">Streak (daily reviews)</div>
+            <div class="big" id="streak">—</div>
+          </div>
+        </div>
+        <div class="hint">Tip: streak increments when you do at least 1 review that day.</div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="tab-about" class="panel" aria-label="About">
+      <div class="card">
+        <div class="h2">About</div>
+        <p class="p">
+          This is a personal Spanish→English flashcard PWA. Your progress is stored locally on this iPhone (IndexedDB).
+        </p>
+
+        <div class="h2">Dataset</div>
+        <p class="p">
+          Right now it uses a tiny sample list. Next, we’ll replace <code>words.json</code> with a 4,000-word list
+          (and include proper attribution if sourced from Wiktionary/other CC datasets).
+        </p>
+
+        <button id="resetBtn" class="btn danger">Reset all progress (local)</button>
+        <div class="hint" id="aboutHint"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
