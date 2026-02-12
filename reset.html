@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reset</title>
+    <style>
+      body { font-family: -apple-system, system-ui, sans-serif; padding: 24px; }
+      code { background: #f2f2f2; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h2>Resetting…</h2>
+    <p>This page unregisters old service workers and clears cached files for this site, then reloads the app.</p>
+
+    <script>
+      (async () => {
+        try {
+          // Unregister service workers
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) {
+              await reg.unregister();
+            }
+          }
+
+          // Clear Cache Storage
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            for (const k of keys) {
+              await caches.delete(k);
+            }
+          }
+
+          // Optional: clear IndexedDB (keeps things clean if schema changed)
+          // Comment out if you want to preserve progress
+          try { indexedDB.deleteDatabase("sf_flashcards_db"); } catch (e) {}
+
+        } catch (e) {
+          // ignore
+        }
+
+        // Hard reload back to the app
+        location.replace("./index.html?reset=" + Date.now());
+      })();
+    </script>
+  </body>
+</html>
