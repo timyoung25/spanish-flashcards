@@ -122,6 +122,8 @@ body {
   background: transparent;
   padding: 0;
 }
+
+/* --- iOS/Safari-safe 3D flip --- */
 .flash-inner {
   position: relative;
   height: 260px;
@@ -129,10 +131,17 @@ body {
   border: 1px solid var(--border);
   background: rgba(255,255,255,.04);
   overflow: hidden;
+
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+
   transition: transform .35s cubic-bezier(.2,.8,.2,1);
+  will-change: transform;
 }
-.flashcard.flipped .flash-inner { transform: rotateY(180deg); }
+
+.flashcard.flipped .flash-inner {
+  transform: rotateY(180deg);
+}
 
 .face {
   position: absolute;
@@ -142,10 +151,20 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  backface-visibility: hidden;
   gap: 10px;
+
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
-.face.back { transform: rotateY(180deg); }
+
+.face.back {
+  transform: rotateY(180deg) translateZ(0);
+  -webkit-transform: rotateY(180deg) translateZ(0);
+}
+/* --- end flip fix --- */
 
 .word {
   font-size: 34px;
