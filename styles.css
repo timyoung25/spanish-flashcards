@@ -116,11 +116,21 @@ body {
   color: var(--muted);
 }
 
+/* Flashcard wrapper */
 .flashcard {
   width: 100%;
   border: 0;
   background: transparent;
   padding: 0;
+
+  /* Critical for iOS Safari 3D flips */
+  perspective: 1200px;
+  -webkit-perspective: 1200px;
+
+  /* Button reset helps Safari rendering quirks */
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
 }
 
 /* --- iOS/Safari-safe 3D flip --- */
@@ -137,10 +147,15 @@ body {
 
   transition: transform .35s cubic-bezier(.2,.8,.2,1);
   will-change: transform;
+
+  /* Extra Safari nudge */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .flashcard.flipped .flash-inner {
   transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
 }
 
 .face {
@@ -156,13 +171,21 @@ body {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+
+  transform: translateZ(1px);
+  -webkit-transform: translateZ(1px);
+}
+
+.face.front {
+  transform: rotateY(0deg) translateZ(1px);
+  -webkit-transform: rotateY(0deg) translateZ(1px);
 }
 
 .face.back {
-  transform: rotateY(180deg) translateZ(0);
-  -webkit-transform: rotateY(180deg) translateZ(0);
+  transform: rotateY(180deg) translateZ(1px);
+  -webkit-transform: rotateY(180deg) translateZ(1px);
 }
 /* --- end flip fix --- */
 
@@ -202,3 +225,4 @@ body {
 .h2 { font-size: 16px; font-weight: 900; margin: 8px 0 4px; }
 .p { color: var(--muted); line-height: 1.5; margin: 6px 0 10px; }
 code { color: #d0d0ff; }
+
