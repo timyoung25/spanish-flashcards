@@ -1,0 +1,18 @@
+[
+  {"spanish":"hola","english":"hello","partOfSpeech":"interjection"},
+  {"spanish":"gracias","english":"thank you","partOfSpeech":"interjection"},
+  {"spanish":"por","english":"for; by","partOfSpeech":"preposition"},
+  {"spanish":"porque","english":"because","partOfSpeech":"conjunction"},
+  {"spanish":"muy","english":"very","partOfSpeech":"adverb"},
+  {"spanish":"bueno","english":"good","partOfSpeech":"adjective"},
+  {"spanish":"casa","english":"house","partOfSpeech":"noun"},
+  {"spanish":"hacer","english":"to do; to make","partOfSpeech":"verb"},
+  {"spanish":"ir","english":"to go","partOfSpeech":"verb"},
+  {"spanish":"aunque","english":"although","partOfSpeech":"conjunction"},
+  {"spanish":"desde","english":"from; since","partOfSpeech":"preposition"},
+  {"spanish":"también","english":"also","partOfSpeech":"adverb"},
+  {"spanish":"pero","english":"but","partOfSpeech":"conjunction"},
+  {"spanish":"antes","english":"before","partOfSpeech":"adverb"},
+  {"spanish":"nuevo","english":"new","partOfSpeech":"adjective"},
+  {"spanish":"persona","english":"person","partOfSpeech":"noun"}
+]
