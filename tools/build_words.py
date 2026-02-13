@@ -2,7 +2,7 @@ import json
 import re
 import tarfile
 from io import BytesIO
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, List
 
 import requests
 from bs4 import BeautifulSoup
@@ -10,17 +10,19 @@ from bs4 import BeautifulSoup
 # ---- Config ----
 N = 4000
 
-# Wiktionary subtitles frequency list pages (word + lemma column)
-# We'll pull ranks 1..4000 from these 4 pages:
+# Use the actual Wiktionary Spanish frequency list pages (subtitles-based list),
+# split by ranges. These pages contain the list content.
 WIKI_PAGES = [
-    "https://en.wiktionary.org/wiki/Wiktionary:Frequency_lists/Spanish/Subtitles10K",  # contains 1..10000
+    "https://en.wiktionary.org/wiki/Wiktionary:Frequency_lists/Spanish1000",
+    "https://en.wiktionary.org/wiki/Wiktionary:Frequency_lists/Spanish1001-2000",
+    "https://en.wiktionary.org/wiki/Wiktionary:Frequency_lists/Spanish2001-3000",
+    "https://en.wiktionary.org/wiki/Wiktionary:Frequency_lists/Spanish3001-4000",
 ]
 
 # FreeDict Spanish->English source archive (TEI XML inside)
-# Note: hosted by FreeDict downloads.
 FREEDICT_SRC_TAR_XZ = "https://download.freedict.org/dictionaries/spa-eng/0.3.1/freedict-spa-eng-0.3.1.src.tar.xz"
 
-UA = {"User-Agent": "spanish-flashcards-builder/1.0 (personal study)"}
+UA = {"User-Agent": "spanish-flashcards-builder/1.1 (personal study)"}
 
 POS_MAP = {
     "noun": "noun",
@@ -51,7 +53,6 @@ def is_probably_verb(pos: str) -> bool:
 
 def clean_english(s: str) -> str:
     s = re.sub(r"\s+", " ", (s or "").strip())
-    # Drop trailing punctuation that looks like definition fragments
     s = s.strip(" ;,")
     return s
 
@@ -61,59 +62,91 @@ def ensure_to_for_verbs(en: str, pos: str) -> str:
         return "to " + en
     return en
 
-def fetch_wiktionary_top_n(n: int) -> List[str]:
-    # We use the Subtitles10K page and take the "lemma forms" column when available.
-    # If lemma column has multiple lemmas, take the first.
-    url = WIKI_PAGES[0]
-    html = requests.get(url, headers=UA, timeout=60).text
-    soup = BeautifulSoup(html, "lxml")
+def _clean_spanish_token(token: str) -> str:
+    token = (token or "").strip().lower()
+    token = token.replace("\u00a0", " ")
+    token = token.split()[0].strip()
+    # Keep Spanish letters and punctuation marks that can be part of tokens (¿¡)
+    token = re.sub(r"[^a-záéíóúüñ¿¡]+", "", token, flags=re.IGNORECASE)
+    return token
 
-    # The page is a wikitable; rows contain rank, word, ppm, lemma forms
+def _parse_wikitable(html: str) -> List[str]:
+    soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", class_="wikitable")
     if not table:
-        raise RuntimeError("Could not find wikitable on Wiktionary frequency page.")
+        return []
 
     out = []
     for tr in table.find_all("tr"):
-        tds = tr.find_all(["td", "th"])
+        tds = tr.find_all("td")
         if len(tds) < 2:
             continue
 
-        # rank in first cell usually
-        rank_text = tds[0].get_text(strip=True)
+        rank_text = tds[0].get_text(strip=True).replace(".", "")
         if not rank_text.isdigit():
             continue
         rank = int(rank_text)
-        if rank < 1 or rank > n:
-            continue
 
-        # Prefer lemma column (often last cell). If missing, use word cell.
+        # Column 2 is "word", last column often "lemma forms"
         word = tds[1].get_text(" ", strip=True)
         lemma = tds[-1].get_text(" ", strip=True) if len(tds) >= 4 else word
-
-        # lemma can include multiple forms; take first token
-        lemma_first = lemma.split()[0].strip()
-        lemma_first = lemma_first.strip().lower()
-
-        # keep Spanish letters; drop weird punctuation
-        lemma_first = re.sub(r"[^a-záéíóúüñ¿¡]+", "", lemma_first, flags=re.IGNORECASE)
+        lemma_first = _clean_spanish_token(lemma) or _clean_spanish_token(word)
         if not lemma_first:
             continue
 
-        out.append(lemma_first)
+        out.append((rank, lemma_first))
 
-    # Keep order; de-dupe while preserving rank order
+    out.sort(key=lambda x: x[0])
+    return [w for _, w in out]
+
+def _parse_plaintext_table(html: str) -> List[str]:
+    # Some pages render as plain text rows like:
+    # "9001.  moisés  5  moisés Moisés"
+    soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text("\n", strip=True)
+
+    rows = []
+    for line in text.splitlines():
+        line = line.strip()
+        m = re.match(r"^(\d+)\.\s+([^\s]+)\s+\d+\s+(.*)$", line)
+        if not m:
+            continue
+        rank = int(m.group(1))
+        word = _clean_spanish_token(m.group(2))
+        lemma_blob = m.group(3)
+        lemma = _clean_spanish_token(lemma_blob) or word
+        if lemma:
+            rows.append((rank, lemma))
+
+    rows.sort(key=lambda x: x[0])
+    return [w for _, w in rows]
+
+def fetch_wiktionary_top_n(n: int) -> List[str]:
+    collected = []
+    for url in WIKI_PAGES:
+        html = requests.get(url, headers=UA, timeout=60).text
+
+        part = _parse_wikitable(html)
+        if not part:
+            part = _parse_plaintext_table(html)
+
+        if not part:
+            raise RuntimeError(f"Could not parse word list from: {url}")
+
+        collected.extend(part)
+
+    # de-dupe while preserving order
     seen = set()
     uniq = []
-    for w in out:
-        if w not in seen:
+    for w in collected:
+        if w and w not in seen:
             seen.add(w)
             uniq.append(w)
         if len(uniq) >= n:
             break
 
     if len(uniq) < n:
-        raise RuntimeError(f"Only got {len(uniq)} lemmas from Wiktionary, expected {n}.")
+        raise RuntimeError(f"Only got {len(uniq)} lemmas, expected {n}.")
     return uniq
 
 def download_freedict_src() -> bytes:
@@ -122,25 +155,24 @@ def download_freedict_src() -> bytes:
     return r.content
 
 def extract_tei_from_tar_xz(tar_xz_bytes: bytes) -> bytes:
-    # tarfile can read xz-compressed tar with mode "r:xz"
     bio = BytesIO(tar_xz_bytes)
     with tarfile.open(fileobj=bio, mode="r:xz") as tf:
-        # Look for .tei or .xml inside
         members = tf.getmembers()
         tei_member = None
+
+        # Prefer something that looks like the main TEI dictionary
         for m in members:
             name = m.name.lower()
-            if name.endswith(".tei") or name.endswith(".tei.xml") or name.endswith(".xml"):
-                # prefer main dictionary file, not metadata
-                if "tei" in name and "readme" not in name and "license" not in name:
-                    tei_member = m
-                    break
+            if ("tei" in name or name.endswith(".tei") or name.endswith(".tei.xml")) and "readme" not in name and "license" not in name:
+                tei_member = m
+                break
+
         if not tei_member:
-            # fallback to first xml-like
             for m in members:
                 if m.name.lower().endswith((".tei", ".tei.xml", ".xml")):
                     tei_member = m
                     break
+
         if not tei_member:
             raise RuntimeError("Could not find TEI/XML in FreeDict source tar.xz")
 
@@ -150,17 +182,10 @@ def extract_tei_from_tar_xz(tar_xz_bytes: bytes) -> bytes:
         return f.read()
 
 def parse_freedict_tei(tei_xml: bytes) -> Dict[str, Tuple[str, str]]:
-    """
-    Returns mapping:
-      spanish_lemma -> (english_gloss, pos)
-    We grab first translation/gloss and POS if present.
-    """
     soup = BeautifulSoup(tei_xml, "lxml-xml")
     mapping: Dict[str, Tuple[str, str]] = {}
 
-    # TEI entries usually under <entry>
     for entry in soup.find_all("entry"):
-        # headword often in <form><orth>
         orth = entry.find("orth")
         if not orth:
             continue
@@ -169,26 +194,21 @@ def parse_freedict_tei(tei_xml: bytes) -> Dict[str, Tuple[str, str]]:
         if not head:
             continue
 
-        # POS can appear as <pos> or <gram type="pos"> etc
         pos = ""
         pos_tag = entry.find("pos")
         if pos_tag:
             pos = pos_tag.get_text(" ", strip=True)
-
         if not pos:
             gram = entry.find("gram", attrs={"type": "pos"})
             if gram:
                 pos = gram.get_text(" ", strip=True)
 
-        # English gloss: often in <cit type="trans"><quote>
         gloss = ""
         cit = entry.find("cit", attrs={"type": "trans"})
         if cit:
             q = cit.find("quote")
             if q:
                 gloss = q.get_text(" ", strip=True)
-
-        # fallback: first <quote> anywhere
         if not gloss:
             q = entry.find("quote")
             if q:
@@ -224,9 +244,6 @@ def main():
             en, pos = lex[w]
         else:
             missing += 1
-            # Keep it usable even when missing: show blank English so you notice.
-            en = ""
-            pos = "other"
 
         en = ensure_to_for_verbs(en, pos)
         out.append({"spanish": w, "english": en, "partOfSpeech": pos})
