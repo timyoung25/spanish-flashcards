@@ -10,14 +10,13 @@ from bs4 import BeautifulSoup
 # ---- Config ----
 N = 4000
 
-# Pull wikitext via MediaWiki API (much more stable than scraping HTML)
 WIKI_API = "https://en.wiktionary.org/w/api.php"
 WIKI_TITLE = "Wiktionary:Frequency_lists/Spanish/Subtitles10K"
 
 # FreeDict Spanish->English source archive (TEI XML inside)
 FREEDICT_SRC_TAR_XZ = "https://download.freedict.org/dictionaries/spa-eng/0.3.1/freedict-spa-eng-0.3.1.src.tar.xz"
 
-UA = {"User-Agent": "spanish-flashcards-builder/1.2 (personal study)"}
+UA = {"User-Agent": "spanish-flashcards-builder/1.3 (personal study)"}
 
 POS_MAP = {
     "noun": "noun",
@@ -57,84 +56,69 @@ def ensure_to_for_verbs(en: str, pos: str) -> str:
         return "to " + en
     return en
 
-def strip_wiki_markup(s: str) -> str:
-    """
-    Strip common wiki markup like [[link|text]], [[link]], bold/italics.
-    """
-    s = s or ""
-    s = s.replace("\u00a0", " ")
-    # [[a|b]] -> b
-    s = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", s)
-    # [[a]] -> a
-    s = re.sub(r"\[\[([^\]]+)\]\]", r"\1", s)
-    # bold/italics
-    s = s.replace("'''", "").replace("''", "")
-    # HTML refs and templates (very rough)
-    s = re.sub(r"<ref[^>]*>.*?</ref>", "", s)
-    s = re.sub(r"{{[^}]+}}", "", s)
-    return s.strip()
-
 def clean_spanish_token(token: str) -> str:
-    token = strip_wiki_markup(token).strip().lower()
+    token = (token or "").replace("\u00a0", " ").strip().lower()
     token = re.sub(r"\s+", " ", token).strip()
     if not token:
         return ""
-    # Take first token if multiple words
     token = token.split()[0].strip()
     # Keep Spanish letters and inverted punctuation
     token = re.sub(r"[^a-záéíóúüñ¿¡]+", "", token, flags=re.IGNORECASE)
     return token
 
-def get_wikitext(title: str) -> str:
+def get_rendered_html(title: str) -> str:
     params = {
         "action": "parse",
         "page": title,
-        "prop": "wikitext",
+        "prop": "text",
         "format": "json",
         "formatversion": "2",
     }
     r = requests.get(WIKI_API, params=params, headers=UA, timeout=60)
     r.raise_for_status()
     data = r.json()
-    wt = data.get("parse", explanation := {}).get("wikitext", "")
-    if not wt:
-        raise RuntimeError(f"Could not fetch wikitext for {title}. Got keys: {list(data.keys())}")
-    return wt
+    html = (data.get("parse") or {}).get("text", "")
+    if not html:
+        raise RuntimeError(f"Could not fetch rendered HTML for {title}.")
+    return html
 
-def parse_subtitles10k_wikitext(wt: str, n: int) -> List[str]:
-    """
-    The Subtitles10K page is typically a wikitable in wikitext:
-      |-
-      | 1 || de || 57770 || de
-    We parse rows by capturing lines that start with '|' and contain '||'.
-    """
+def extract_top_n_from_html(html: str, n: int) -> List[str]:
+    soup = BeautifulSoup(html, "lxml")
+
+    # Frequency pages usually contain a big table. Grab the "largest" table by row count.
+    tables = soup.find_all("table")
+    if not tables:
+        raise RuntimeError("No tables found in rendered HTML from Wiktionary API.")
+
+    best_table = None
+    best_rows = 0
+    for t in tables:
+        rows = t.find_all("tr")
+        if len(rows) > best_rows:
+            best_rows = len(rows)
+            best_table = t
+
+    if not best_table or best_rows < 100:
+        raise RuntimeError("Could not find a large frequency table in rendered HTML.")
+
     words_by_rank: Dict[int, str] = {}
 
-    # Find table row lines of the form: | rank || word || ... || lemma
-    # We'll parse by splitting on '||' after removing leading '|'.
-    for line in wt.splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            continue
-        if "||" not in line:
+    for tr in best_table.find_all("tr"):
+        tds = tr.find_all(["td", "th"])
+        if len(tds) < 2:
             continue
 
-        # remove leading |
-        body = line.lstrip("|").strip()
-        parts = [p.strip() for p in body.split("||")]
-        if len(parts) < 2:
-            continue
-
-        rank_txt = strip_wiki_markup(parts[0]).strip().rstrip(".")
+        rank_txt = tds[0].get_text(" ", strip=True).replace(".", "")
+        rank_txt = re.sub(r"[^\d]", "", rank_txt)
         if not rank_txt.isdigit():
             continue
         rank = int(rank_txt)
         if rank < 1 or rank > n:
             continue
 
-        # prefer lemma column if present (often last), otherwise word column
-        word_cell = parts[1]
-        lemma_cell = parts[-1] if len(parts) >= 4 else parts[1]
+        # Usually: rank | word | frequency | lemma(s)
+        word_cell = tds[1].get_text(" ", strip=True)
+        lemma_cell = tds[-1].get_text(" ", strip=True) if len(tds) >= 4 else word_cell
 
         lemma = clean_spanish_token(lemma_cell)
         word = clean_spanish_token(word_cell)
@@ -142,21 +126,6 @@ def parse_subtitles10k_wikitext(wt: str, n: int) -> List[str]:
         if tok:
             words_by_rank.setdefault(rank, tok)
 
-    if len(words_by_rank) < n:
-        # As a fallback, sometimes ranks appear as "1. de" in plain text.
-        # Try that too.
-        for line in wt.splitlines():
-            m = re.match(r"^(\d+)\.\s+([^\s]+)", strip_wiki_markup(line))
-            if not m:
-                continue
-            rank = int(m.group(1))
-            if rank < 1 or rank > n:
-                continue
-            tok = clean_spanish_token(m.group(2))
-            if tok:
-                words_by_rank.setdefault(rank, tok)
-
-    # Build in order, de-dupe while preserving rank order
     out: List[str] = []
     seen = set()
     for rnk in range(1, n + 1):
@@ -182,7 +151,6 @@ def extract_tei_from_tar_xz(tar_xz_bytes: bytes) -> bytes:
         members = tf.getmembers()
         tei_member = None
 
-        # Prefer the main TEI dictionary file
         for m in members:
             name = m.name.lower()
             if ("tei" in name or name.endswith(".tei") or name.endswith(".tei.xml")) and "readme" not in name and "license" not in name:
@@ -244,9 +212,9 @@ def parse_freedict_tei(tei_xml: bytes) -> Dict[str, Tuple[str, str]]:
     return mapping
 
 def main():
-    print("Fetching top words (wikitext via API)…")
-    wt = get_wikitext(WIKI_TITLE)
-    top = parse_subtitles10k_wikitext(wt, N)
+    print("Fetching top words (rendered HTML via API)…")
+    html = get_rendered_html(WIKI_TITLE)
+    top = extract_top_n_from_html(html, N)
 
     print("Downloading FreeDict spa-eng source…")
     tar_xz = download_freedict_src()
