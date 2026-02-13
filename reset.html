@@ -12,6 +12,7 @@
   <body>
     <h2>Resetting…</h2>
     <p>This page unregisters old service workers and clears cached files for this site, then reloads the app.</p>
+    <p><strong>Your progress is preserved.</strong></p>
 
     <script>
       (async () => {
@@ -24,18 +25,13 @@
             }
           }
 
-          // Clear Cache Storage
+          // Clear Cache Storage (this does NOT touch IndexedDB progress)
           if ("caches" in window) {
             const keys = await caches.keys();
             for (const k of keys) {
               await caches.delete(k);
             }
           }
-
-          // Optional: clear IndexedDB (keeps things clean if schema changed)
-          // Comment out if you want to preserve progress
-          try { indexedDB.deleteDatabase("sf_flashcards_db"); } catch (e) {}
-
         } catch (e) {
           // ignore
         }
